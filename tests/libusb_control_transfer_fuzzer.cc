@@ -13,28 +13,32 @@
 // limitations under the License.
 #include <fuzzer/FuzzedDataProvider.h>
 
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-
-#include "libusb/core.c" // TODO: Create header file
 #include "libusb/libusb.h"
 #include "libusb/libusbi.h"
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  
-  struct discovered_devs *disc_devs = discovered_devs_alloc();
-  if (!disc_devs) {
-    return LIBUSB_ERROR_NO_MEM;
-  }
 
-  struct libusb_device *dev = usbi_alloc_device(NULL, /* unsigned long session_id */);
-  if (!dev) {
-    discovered_devs_free(disc_devs);
-    return LIBUSB_ERROR_NO_MEM;
-  }
+  struct libusb_transfer *transfer;
+  FuzzedDataProvider stream(data, size);
+  uint8_t bmRequestType = stream.ConsumeIntegral<uint8_t>();
+  uint8_t bRequest = stream.ConsumeIntegral<uint8_t>();
+  uint16_t wValue = stream.ConsumeIntegral<uint16_t>();
+  uint16_t wIndex = stream.ConsumeIntegral<uint16_t>();
+  uint16_t wLength = stream.ConsumeIntegral<uint16_t>();
 
-  usbi_connect_device(dev);
+  libusb_context *ctx = NULL;
+  unsigned long session_id;
+  stream.ConsumeData(&session_id, 8);
+
+  libusb_device *dev = usbi_alloc_device(ctx, session_id);
+  libusb_device_handle *dev_handle;
+  libusb_open(dev, &dev_handle);
+
+  std::vector<char> data_ = stream.ConsumeRemainingBytes<char>();
+
+  libusb_control_transfer(dev_handle, bmRequestType, bRequest,
+		wValue, wIndex, data, wLength, timeout)
 
   return 0;
+
 }
